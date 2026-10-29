@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wordle Lab</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #121213; --panel: #1a1a1c; --line: #3a3a3c; --text: #f2f2f2; --muted: #9a9aa0;
+    --green: #538d4e; --yellow: #b59f3b; --gray: #3a3a3c; --key: #818384; --error: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 20px; margin: 0 auto 0 0; letter-spacing: .05em; }
+  button { font: inherit; color: var(--text); background: #2c2c2e; border: 1px solid var(--line);
+           border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { background: #3a3a3c; }
+  button:disabled { opacity: .5; cursor: default; }
+  main { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; padding: 20px; }
+
+  /* Board */
+  #game { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  #board { display: grid; grid-template-rows: repeat(6, 56px); gap: 6px; }
+  .row { display: grid; grid-template-columns: repeat(5, 56px); gap: 6px; }
+  .row.shake { animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-6px) } 75% { transform: translateX(6px) } }
+  .tile { display: grid; place-items: center; border: 2px solid var(--line); font-size: 28px;
+          font-weight: 700; text-transform: uppercase; }
+  .tile.filled { border-color: #565758; }
+  .tile.green, .tile.yellow, .tile.gray { border-color: transparent; }
+  .green { background: var(--green) !important; }
+  .yellow { background: var(--yellow) !important; }
+  .gray { background: var(--gray) !important; }
+  #status { min-height: 1.4em; font-weight: 600; }
+
+  /* Keyboard */
+  #keyboard { display: flex; flex-direction: column; gap: 6px; }
+  .krow { display: flex; justify-content: center; gap: 5px; }
+  .key { min-width: 38px; height: 54px; padding: 0 6px; background: var(--key); border: 0;
+         font-weight: 700; text-transform: uppercase; }
+  .key.wide { min-width: 62px; font-size: 12px; }
+
+  /* Side panel */
+  aside { width: 340px; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; }
+  #counter { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 4px 6px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #2a2a2c; }
+  .word { font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .badge { font-size: 11px; color: var(--green); }
+  #words { text-transform: uppercase; word-spacing: 4px; font-size: 13px; }
+
+  /* Simulation chart */
+  .bar-row { display: grid; grid-template-columns: 22px 1fr 44px; align-items: center; gap: 8px; margin: 3px 0; }
+  .bar { height: 16px; background: var(--green); border-radius: 0 3px 3px 0; min-width: 2px; }
+  .bar.fail { background: var(--error); }
+
+  #toast { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); background: var(--text);
+           color: var(--bg); padding: 10px 16px; border-radius: 6px; font-weight: 600; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>WORDLE LAB</h1>
+  <button id="new-game">New game</button>
+  <button id="simulate">Simulate all answers</button>
+</header>
+
+<main>
+  <section id="game">
+    <div id="board" aria-label="Game board"></div>
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="keyboard"></div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>Words remaining</h2>
+      <div id="counter">–</div>
+      <div class="muted" id="counter-note">possible answers consistent with your guesses</div>
+    </div>
+
+    <div class="card">
+      <h2>Hints</h2>
+      <button id="hint">Get hint</button>
+      <div id="hint-body" class="muted" style="margin-top:10px">
+        Ranks guesses by entropy: how evenly a guess splits the remaining words.
+        Each bit roughly halves them. Click a word to type it.
+      </div>
+    </div>
+
+    <div class="card" id="sim-card" hidden>
+      <h2>Simulation</h2>
+      <div id="sim-body"></div>
+    </div>
+  </aside>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const ROWS = 6, COLS = 5;
+const KEY_ROWS = ["qwertyuiop", "asdfghjkl", "<zxcvbnm>"];
+const RANK = { gray: 1, yellow: 2, green: 3 };  // keyboard keeps its best colour
+
+let gameId = null, row = 0, current = "", status = "playing", busy = false, hintsOn = false;
+const keyColors = {};
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+
+// ---- API: every call resolves to {ok, data} or {ok:false, error}; never throws.
+async function api(method, path, body) {
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) return { ok: true, data };
+    const d = data.detail;
+    const error = typeof d === "string" ? d : (Array.isArray(d) && d[0]?.msg) || `Request failed (${res.status})`;
+    return { ok: false, status: res.status, error };
+  } catch {
+    return { ok: false, error: "Can't reach the server. Is it running?" };
+  }
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+// ---- Board and keyboard
+function buildBoard() {
+  const board = $("board");
+  board.replaceChildren();
+  for (let r = 0; r < ROWS; r++) {
+    const rowEl = el("div", "row");
+    for (let c = 0; c < COLS; c++) rowEl.append(el("div", "tile"));
+    board.append(rowEl);
+  }
+}
+
+function buildKeyboard() {
+  const kb = $("keyboard");
+  kb.replaceChildren();
+  for (const letters of KEY_ROWS) {
+    const r = el("div", "krow");
+    for (const ch of letters) {
+      const label = ch === "<" ? "Enter" : ch === ">" ? "⌫" : ch;
+      const key = el("button", "key" + (ch === "<" || ch === ">" ? " wide" : ""), label);
+      key.dataset.key = ch === "<" ? "Enter" : ch === ">" ? "Backspace" : ch;
+      if (ch === ">") key.setAttribute("aria-label", "Backspace");
+      key.addEventListener("click", () => press(key.dataset.key));
+      r.append(key);
+    }
+    kb.append(r);
+  }
+}
+
+function tilesOf(r) { return $("board").children[r].children; }
+
+function drawCurrent() {
+  const tiles = tilesOf(row);
+  for (let c = 0; c < COLS; c++) {
+    tiles[c].textContent = current[c] || "";
+    tiles[c].classList.toggle("filled", !!current[c]);
+  }
+}
+
+function paintRow(r, word, colors) {
+  const tiles = tilesOf(r);
+  colors.forEach((color, c) => {
+    tiles[c].textContent = word[c];
+    tiles[c].classList.add(color);
+    tiles[c].setAttribute("aria-label", `${word[c]} ${color}`);
+    const ch = word[c];
+    if (!keyColors[ch] || RANK[color] > RANK[keyColors[ch]]) keyColors[ch] = color;
+  });
+  document.querySelectorAll(".key").forEach((k) => {
+    k.classList.remove("green", "yellow", "gray");
+    const color = keyColors[k.dataset.key];
+    if (color) k.classList.add(color);
+  });
+}
+
+function shake() {
+  const r = $("board").children[row];
+  r.classList.remove("shake");
+  void r.offsetWidth;  // restart the animation
+  r.classList.add("shake");
+}
+
+// ---- Game flow
+async function newGame() {
+  const res = await api("POST", "/api/games");
+  if (!res.ok) { toast(res.error); return; }
+  gameId = res.data.id; row = 0; current = ""; status = "playing"; hintsOn = false;
+  for (const k in keyColors) delete keyColors[k];
+  buildBoard(); buildKeyboard();
+  $("status").textContent = "";
+  $("counter").textContent = res.data.remaining;
+  $("hint").disabled = false;
+  $("hint-body").replaceChildren(el("span", null,
+    "Ranks guesses by entropy: how evenly a guess splits the remaining words. Each bit roughly halves them. Click a word to type it."));
+}
+
+function press(key) {
+  if (!gameId || status !== "playing" || busy) return;
+  if (key === "Enter") return submit();
+  if (key === "Backspace") current = current.slice(0, -1);
+  else if (/^[a-z]$/i.test(key) && current.length < COLS) current += key.toLowerCase();
+  drawCurrent();
+}
+
+async function submit() {
+  if (current.length < COLS) { shake(); toast("Not enough letters"); return; }
+  busy = true;
+  const res = await api("POST", `/api/games/${gameId}/guesses`, { guess: current });
+  busy = false;
+  if (!res.ok) {
+    shake(); toast(res.error);
+    if (res.status === 404) gameId = null;  // server restarted; game is gone
+    return;
+  }
+  const d = res.data;
+  paintRow(row, d.guess, d.colors);
+  row++; current = ""; status = d.status;
+  $("counter").textContent = d.remaining;
+  if (status === "won") $("status").textContent = `Solved in ${row}! 🎉`;
+  else if (status === "lost") $("status").textContent = `Out of guesses. The word was ${d.answer.toUpperCase()}.`;
+  if (status !== "playing") $("hint").disabled = true;
+  else if (hintsOn) getHint();
+}
+
+async function getHint() {
+  if (!gameId || status !== "playing") return;
+  hintsOn = true;
+  const body = $("hint-body");
+  body.replaceChildren(el("span", "muted", "Thinking…"));
+  $("hint").disabled = true;
+  const res = await api("GET", `/api/games/${gameId}/hint?top=5`);
+  $("hint").disabled = status !== "playing";
+  if (!res.ok) { body.replaceChildren(el("span", "muted", res.error)); return; }
+  const d = res.data;
+  $("counter").textContent = d.remaining;
+
+  const table = el("table");
+  const head = el("tr");
+  [["Guess", ""], ["Bits", "num"], ["Avg left", "num"]].forEach(([t, c]) => head.append(el("th", c, t)));
+  const thead = el("thead"), tbody = el("tbody");
+  thead.append(head);
+  table.append(thead, tbody);
+  for (const s of d.suggestions) {
+    const tr = el("tr");
+    tr.title = `Expected to leave about ${s.expected_remaining.toFixed(1)} of ${d.remaining} words`;
+    const w = el("td");
+    w.append(el("span", "word", s.word), " ");
+    if (s.possible) w.append(el("span", "badge", "could win"));
+    tr.append(w, el("td", "num", s.entropy.toFixed(2)), el("td", "num", s.expected_remaining.toFixed(1)));
+    tr.addEventListener("click", () => { if (status === "playing") { current = s.word; drawCurrent(); } });
+    tbody.append(tr);
+  }
+  const parts = [table];
+  if (d.remaining_words) {
+    const words = el("div", null, d.remaining_words.join(" "));
+    words.id = "words";
+    parts.push(el("div", "muted", "Still possible:"), words);
+  }
+  body.replaceChildren(...parts);
+}
+
+async function runSimulation() {
+  const card = $("sim-card"), body = $("sim-body");
+  card.hidden = false;
+  $("simulate").disabled = true;
+  body.replaceChildren(el("span", "muted", "Playing every answer… about 40 seconds the first time."));
+  const res = await api("GET", "/api/simulate");
+  $("simulate").disabled = false;
+  if (!res.ok) { body.replaceChildren(el("span", "muted", res.error)); return; }
+  const d = res.data;
+  const max = Math.max(...Object.values(d.distribution));
+  const parts = [el("div", null, `${d.games} games · average ${d.average.toFixed(2)} guesses · ${d.failed} failed (>6)`)];
+  for (const [n, count] of Object.entries(d.distribution)) {
+    const r = el("div", "bar-row");
+    const track = el("div"), bar = el("div", "bar" + (Number(n) > 6 ? " fail" : ""));
+    bar.style.width = `${(count / max) * 100}%`;
+    track.append(bar);
+    r.append(el("span", "muted", n), track, el("span", "num", count));
+    parts.push(r);
+  }
+  parts.push(el("div", "muted", "Hardest: " + d.hardest.map((h) => `${h.answer.toUpperCase()} (${h.guesses})`).join(", ")));
+  body.replaceChildren(...parts);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // preventDefault also stops Enter from re-clicking whichever button has focus
+  if (e.key === "Enter" || e.key === "Backspace" || /^[a-z]$/i.test(e.key)) { e.preventDefault(); press(e.key); }
+});
+$("new-game").addEventListener("click", (e) => { e.target.blur(); newGame(); });
+$("hint").addEventListener("click", getHint);
+$("simulate").addEventListener("click", runSimulation);
+
+buildBoard(); buildKeyboard(); newGame();
+</script>
+</body>
+</html>
