@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from wordle.engine import load_words, score
-from wordle.solver import entropy, remaining_words, simulate, solve, suggest
+from wordle.solver import entropy, remaining_words, simulate, solve, split, suggest
 
 # Four real answers sharing C R A _ E, so any one of them as a guess only says "it's me" or "it's not".
 FOUR = ["crane", "crate", "crave", "craze"]
@@ -61,3 +61,9 @@ def test_suggest_with_one_word_left_picks_it():
 def test_solve_and_simulate():
     assert solve("crave", FOUR, FOUR + [SPLITTER]) == [SPLITTER, "crave"]
     assert simulate(FOUR, FOUR + [SPLITTER]) == {w: 2 for w in FOUR}
+
+
+def test_split_groups_words_by_pattern():
+    assert sorted(len(ws) for ws in split(SPLITTER, FOUR).values()) == [1, 1, 1, 1]
+    groups = split("crane", FOUR)
+    assert groups == {"GGGGG": ["crane"], "GGG.G": ["crate", "crave", "craze"]}

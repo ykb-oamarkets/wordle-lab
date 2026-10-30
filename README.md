@@ -152,8 +152,9 @@ The solver always opens with RAISE, worth 5.88 bits. I had it play all 2,315 pos
 * [![FastAPI][FastAPI-badge]][FastAPI-url]
 * [![pytest][pytest-badge]][pytest-url]
 * [![JavaScript][JavaScript-badge]][JavaScript-url]
+* [![GSAP][GSAP-badge]][GSAP-url]
 
-The page is one HTML file with plain JavaScript. There's no build step and no front-end framework.
+The page is one HTML file with plain JavaScript. There's no build step and no front-end framework. GSAP runs the animations, and a copy ships in `web/static/`, so it works offline. The typeface is Gabarito from Google Fonts. Offline, the page falls back to a system font.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -188,7 +189,7 @@ The word lists are already in `data/`, so there's nothing else to download.
    ```sh
    pip install -r requirements.txt
    ```
-4. Run the tests. All 38 should pass in about two seconds.
+4. Run the tests. All 42 should pass in about two seconds.
    ```sh
    python -m pytest
    ```
@@ -208,11 +209,15 @@ Run every command below from the `wordle-lab` folder with the virtual environmen
 python -m uvicorn web.app:app --port 8000
 ```
 
-Open http://localhost:8000. Type on your keyboard or click the keys on screen. Press **Get hint** when you want help, and click any suggested word to type it in. After your first hint, the panel updates by itself after every guess.
+Open http://localhost:8000. Everything fits on one screen, so there's nothing to scroll. You play on the left. On the right, a little blue solver talks you through what's happening, like "RAISE knocked out 2,306 words. 9 left."
 
-The first hint of a game checks 2,315 words against 2,315 words, which takes about seven seconds. The server starts on it as soon as it boots, so it's usually ready before you ask.
+* **The pile.** Every possible secret word is one dot. After each guess, the ruled-out dots wink out and the number counts down. When 12 or fewer are left, their names show up underneath.
+* **Measure your guess.** Type five letters and stop before you press Enter. You'll see how many bits the guess is worth, a grade from Weak to Best possible, and the solver's own pick if it has a better one. Below that is a row of blocks, one for each group of words the guess would make. Many small blocks means a great guess. Point at a block and its words light up blue in the pile.
+* **My picks.** Press `?` or click **Show me**. Click a pick to type it, and the meter measures it. A green dot means the word could be the secret. After your first ask, the picks update by themselves after every guess.
 
-**Simulate all answers** takes about 40 seconds the first time. The server remembers the result, so later clicks show it straight away.
+The first measurement of a game checks 2,315 words against 2,315 words, which takes about seven seconds. The server starts on it as soon as it boots, so it's usually ready before you ask.
+
+**Benchmark** opens a pop-up where the solver plays every secret word. It takes about 40 seconds the first time. The server remembers the result, so later clicks show it straight away.
 
 ### Play in the terminal
 
@@ -228,8 +233,10 @@ The terminal version uses the same game and solver as the website, with no web c
 | Method | Path | What you get back |
 |---|---|---|
 | `POST` | `/api/games` | A new game's `id`, `max_guesses` and `remaining` |
-| `POST` | `/api/games/{id}/guesses` with `{"guess": "crane"}` | `pattern`, `colors`, `status`, `guesses_left`, `remaining`, plus `answer` once the game ends |
+| `GET` | `/api/words` | Every possible secret word, in the order the pile draws them |
+| `POST` | `/api/games/{id}/guesses` with `{"guess": "crane"}` | `pattern`, `colors`, `status`, `guesses_left`, `remaining`, `remaining_words`, plus `answer` once the game ends |
 | `GET` | `/api/games/{id}/hint?top=5` | `remaining`, the top `suggestions` with `entropy`, `expected_remaining` and `possible`, and `remaining_words` when 20 or fewer are left |
+| `GET` | `/api/games/{id}/split?guess=crane` | What would happen if you guessed this word: `entropy`, `max_entropy`, `expected_remaining`, `possible`, the solver's `best` guess, and the `groups` of words for each color pattern. It doesn't use up a turn. |
 | `GET` | `/api/simulate` | `games`, `average`, `distribution`, `failed` and the 10 `hardest` secret words |
 
 Patterns use `G` for green, `Y` for yellow and `.` for gray. CRANE against EERIE comes back as `..Y.G`.
@@ -238,7 +245,7 @@ Every error comes back as `{"detail": "<message>"}`:
 
 * `400` means the guess was the wrong length, had non-letters, or isn't in the word list. It doesn't cost you a turn.
 * `404` means there's no game with that id. Games live in memory, so restarting the server clears them.
-* `409` means the game is already over, for both guesses and hints.
+* `409` means the game is already over, for guesses, hints and previews.
 * `422` means the request body was missing or broken, or `top` was outside 1 to 20.
 
 Hints only use the colors you've already seen. They never peek at the secret word.
@@ -248,7 +255,7 @@ Hints only use the colors you've already seen. They never peek at the secret wor
 ```
 wordle/            game logic, no web code
   engine.py        score(), load_words(), Game
-  solver.py        remaining_words(), entropy(), suggest(), solve(), simulate()
+  solver.py        remaining_words(), split(), entropy(), suggest(), solve(), simulate()
   __main__.py      terminal version
 web/
   app.py           FastAPI routes that call into wordle/
@@ -306,3 +313,5 @@ I built this with Claude Code, an AI coding tool. Code that runs isn't the same 
 [pytest-url]: https://docs.pytest.org/
 [JavaScript-badge]: https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black
 [JavaScript-url]: https://developer.mozilla.org/en-US/docs/Web/JavaScript
+[GSAP-badge]: https://img.shields.io/badge/GSAP-0AE448?style=for-the-badge&logo=greensock&logoColor=black
+[GSAP-url]: https://gsap.com/

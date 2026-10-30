@@ -34,6 +34,14 @@ def remaining_words(words: Iterable[str], history: Iterable[Tuple[str, str]]) ->
     return [w for w in words if all(score(g, w) == p for g, p in history)]
 
 
+def split(guess: str, remaining: Sequence[str]) -> Dict[str, List[str]]:
+    """Group the remaining words by the pattern `guess` would show against each one."""
+    groups: Dict[str, List[str]] = {}
+    for w in remaining:
+        groups.setdefault(score(guess, w), []).append(w)
+    return groups
+
+
 def pattern_counts(guess: str, remaining: Sequence[str]) -> Counter:
     return Counter(score(guess, w) for w in remaining)
 

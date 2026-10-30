@@ -21,7 +21,8 @@ def guess(game_id, word):
 def test_index_page():
     res = client.get("/")
     assert res.status_code == 200
-    assert "WORDLE LAB" in res.text
+    assert "<title>Wordle Lab</title>" in res.text
+    assert client.get("/static/gsap.min.js").status_code == 200  # served locally, works offline
 
 
 def test_new_game():
@@ -38,6 +39,8 @@ def test_guess_returns_colors_status_and_remaining():
     assert data["status"] == "playing"
     assert data["guesses_left"] == 5
     assert 1 <= data["remaining"] < 2315
+    assert len(data["remaining_words"]) == data["remaining"]
+    assert "crane" in data["remaining_words"]
     assert "answer" not in data  # don't leak it mid-game
 
 
@@ -117,3 +120,32 @@ def test_simulate(monkeypatch):
     assert sum(data["distribution"].values()) == 4
     assert data["failed"] == 0
     assert 1 <= data["average"] <= 4
+
+
+def test_words():
+    assert client.get("/api/words").json()["words"] == server.ANSWERS
+
+
+def test_split_preview():
+    gid = start("crane")
+    remaining = guess(gid, "slate").json()["remaining"]
+    data = client.get(f"/api/games/{gid}/split", params={"guess": "CRANE"}).json()
+    assert data["guess"] == "crane"
+    assert data["remaining"] == remaining
+    assert data["possible"] is True
+    assert sum(len(g["words"]) for g in data["groups"]) == remaining
+    sizes = [len(g["words"]) for g in data["groups"]]
+    assert sizes == sorted(sizes, reverse=True)
+    assert 0 < data["entropy"] <= data["max_entropy"]
+    top_hint = client.get(f"/api/games/{gid}/hint?top=1").json()["suggestions"][0]
+    assert data["best"] == top_hint  # the meter's "best" marker matches Fig. 3
+    # Previewing doesn't use up a guess.
+    assert guess(gid, "crane").json()["guesses_left"] == 4
+
+
+def test_split_preview_errors():
+    gid = start("crane")
+    assert client.get(f"/api/games/{gid}/split", params={"guess": "zzzzz"}).status_code == 400
+    assert client.get("/api/games/nope/split", params={"guess": "crane"}).status_code == 404
+    guess(gid, "crane")
+    assert client.get(f"/api/games/{gid}/split", params={"guess": "slate"}).status_code == 409

@@ -5,116 +5,183 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wordle Lab</title>
 <link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400..900&display=swap" rel="stylesheet">
 <style>
+  /* One screen, no scrolling. Sizes follow the window height.
+     Game colors (green, yellow, gray) belong to the board. Blue belongs to the solver. */
   :root {
-    --bg: #121213; --panel: #1a1a1c; --line: #3a3a3c; --text: #f2f2f2; --muted: #9a9aa0;
-    --green: #538d4e; --yellow: #b59f3b; --gray: #3a3a3c; --key: #818384; --error: #c0392b;
+    --bg: #fff5e4; --card: #fff; --ink: #2a211a; --ink-2: #74695c; --line: #ece0c9; --key: #eadfca;
+    --green: #6aaa64; --yellow: #c9b458; --gray: #8a8d8f; --solver: #3b5bff; --solver-soft: #e8ecff; --oops: #ff5a4f;
+    --tile: clamp(36px, 6vh, 58px); --key-h: clamp(36px, 5.3vh, 52px); --dot: clamp(3px, .5vh, 5px);
+    --font: "Gabarito", ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; }
-  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
-  header h1 { font-size: 20px; margin: 0 auto 0 0; letter-spacing: .05em; }
-  button { font: inherit; color: var(--text); background: #2c2c2e; border: 1px solid var(--line);
-           border-radius: 6px; padding: 6px 12px; cursor: pointer; }
-  button:hover:not(:disabled) { background: #3a3a3c; }
-  button:disabled { opacity: .5; cursor: default; }
-  main { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; padding: 20px; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font: 15px/1.4 var(--font); }
+  @media (min-width: 980px) and (min-height: 600px) { body { overflow: hidden; } }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; }
+  button:disabled { opacity: .45; cursor: default; }
+  :focus-visible { outline: 3px solid var(--solver); outline-offset: 2px; }
+  .num { font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 
-  /* Board */
-  #game { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-  #board { display: grid; grid-template-rows: repeat(6, 56px); gap: 6px; }
-  .row { display: grid; grid-template-columns: repeat(5, 56px); gap: 6px; }
-  .row.shake { animation: shake .35s; }
-  @keyframes shake { 25% { transform: translateX(-6px) } 75% { transform: translateX(6px) } }
-  .tile { display: grid; place-items: center; border: 2px solid var(--line); font-size: 28px;
-          font-weight: 700; text-transform: uppercase; }
-  .tile.filled { border-color: #565758; }
-  .tile.green, .tile.yellow, .tile.gray { border-color: transparent; }
-  .green { background: var(--green) !important; }
-  .yellow { background: var(--yellow) !important; }
-  .gray { background: var(--gray) !important; }
-  #status { min-height: 1.4em; font-weight: 600; }
+  /* Header */
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 28px; }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 20px; margin-right: auto; }
+  .logo b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: #fff; font-size: 14px;
+            box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .15); }
+  .btn { border-radius: 12px; padding: 9px 16px; font-weight: 700; font-size: 14px; background: var(--ink); color: var(--bg); }
+  .btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
 
-  /* Keyboard */
-  #keyboard { display: flex; flex-direction: column; gap: 6px; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: auto minmax(400px, 600px);
+         gap: clamp(28px, 5vw, 72px); justify-content: center; align-items: center; padding: 0 28px 20px; }
+  @media (max-width: 979px) { main { grid-template-columns: 1fr; justify-items: center; } }
+
+  /* Board and keyboard */
+  .game { display: flex; flex-direction: column; align-items: center; gap: clamp(14px, 2.6vh, 26px); }
+  #board { display: grid; gap: 6px; }
+  .row { display: grid; grid-template-columns: repeat(5, var(--tile)); gap: 6px; perspective: 500px; }
+  .tile { height: var(--tile); display: grid; place-items: center; border-radius: 10px; background: var(--card);
+          border: 2px solid var(--line); font-weight: 800; font-size: calc(var(--tile) * .48); text-transform: uppercase; }
+  .tile.filled { border-color: var(--ink-2); }
+  .tile.green, .tile.yellow, .tile.gray { color: #fff; border-color: transparent; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .14); }
+  .green { background: var(--green) !important; } .yellow { background: var(--yellow) !important; } .gray { background: var(--gray) !important; }
+  #keyboard { display: flex; flex-direction: column; gap: 6px; user-select: none; }
   .krow { display: flex; justify-content: center; gap: 5px; }
-  .key { min-width: 38px; height: 54px; padding: 0 6px; background: var(--key); border: 0;
-         font-weight: 700; text-transform: uppercase; }
-  .key.wide { min-width: 62px; font-size: 12px; }
+  .key { min-width: calc(var(--key-h) * .8); height: var(--key-h); padding: 0 6px; border-radius: 10px; background: var(--key);
+         font-weight: 700; font-size: 14px; text-transform: uppercase; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1);
+         transition: background-color .3s, color .3s; }
+  .key.wide { min-width: calc(var(--key-h) * 1.35); font-size: 12px; }
+  .key.green, .key.yellow, .key.gray { color: #fff; }
 
-  /* Side panel */
-  aside { width: 340px; display: flex; flex-direction: column; gap: 16px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
-  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; }
-  #counter { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .muted { color: var(--muted); font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: 4px 6px; }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; }
-  td.num, th.num { text-align: right; }
-  tbody tr { cursor: pointer; }
-  tbody tr:hover { background: #2a2a2c; }
-  .word { font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-  .badge { font-size: 11px; color: var(--green); }
-  #words { text-transform: uppercase; word-spacing: 4px; font-size: 13px; }
+  /* The solver, talking */
+  .lab { display: flex; flex-direction: column; gap: clamp(10px, 1.6vh, 14px); width: 100%; max-height: 100%; }
+  .say { display: flex; align-items: center; gap: 14px; }
+  .bot { flex: none; width: 48px; height: 48px; border-radius: 50% 50% 44% 44%; background: var(--solver);
+         display: flex; gap: 9px; align-items: center; justify-content: center; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .18); }
+  .eye { width: 7px; height: 12px; border-radius: 4px; background: #fff; }
+  .bubble { position: relative; flex: 1; background: var(--card); border-radius: 16px; padding: 12px 16px; min-height: 48px;
+            font-size: 16px; display: flex; align-items: center; }
+  .bubble::before { content: ""; position: absolute; left: -7px; top: 50%; width: 14px; height: 14px; background: var(--card);
+                    transform: translateY(-50%) rotate(45deg); border-radius: 2px; }
+  .bubble.oops { color: var(--oops); }
+  .bubble b { font-weight: 800; letter-spacing: .04em; }
 
-  /* Simulation chart */
-  .bar-row { display: grid; grid-template-columns: 22px 1fr 44px; align-items: center; gap: 8px; margin: 3px 0; }
-  .bar { height: 16px; background: var(--green); border-radius: 0 3px 3px 0; min-width: 2px; }
-  .bar.fail { background: var(--error); }
+  .panel { background: var(--card); border-radius: 18px; padding: clamp(12px, 1.8vh, 16px) 18px; }
+  .ptitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; font-size: 14px; font-weight: 800; }
+  .ptitle span { font-weight: 500; color: var(--ink-2); }
+  .small { border-radius: 10px; padding: 5px 11px; font-weight: 700; font-size: 13px; background: var(--solver); color: #fff; }
+  kbd { font: 700 11px var(--font); background: rgba(255, 255, 255, .25); border-radius: 4px; padding: 0 5px; margin-left: 4px; }
+  .hint { color: var(--ink-2); font-size: 14px; margin: 0; }
 
-  #toast { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); background: var(--text);
-           color: var(--bg); padding: 10px 16px; border-radius: 6px; font-weight: 600; opacity: 0;
-           transition: opacity .2s; pointer-events: none; }
-  #toast.show { opacity: 1; }
+  /* The pile */
+  .count { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  #counter { font-size: clamp(30px, 5vh, 44px); line-height: 1; }
+  #pile { display: grid; grid-template-columns: repeat(auto-fill, var(--dot)); gap: 1px; }
+  .dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--ink); }
+  #pile.focus .dot:not(.lit) { opacity: .12 !important; }  /* must beat GSAP's inline opacity */
+  .dot.lit { background: var(--solver); opacity: 1 !important; position: relative; z-index: 1; }
+  #left { min-height: 20px; margin-top: 8px; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #left b { color: var(--ink); letter-spacing: .04em; }
+
+  /* Measure your guess */
+  .m-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .m-word { font-weight: 800; font-size: clamp(24px, 3.6vh, 32px); letter-spacing: .12em; text-transform: uppercase; }
+  .m-bits { display: flex; align-items: baseline; gap: 6px; }
+  .m-bits .num { font-size: clamp(28px, 4.4vh, 40px); color: var(--solver); }
+  .tag { display: inline-block; border-radius: 8px; padding: 2px 8px; font-weight: 800; font-size: 13px; color: #fff; }
+  .t-best { background: var(--green); } .t-good { background: var(--solver); } .t-ok { background: var(--yellow); } .t-weak { background: var(--oops); }
+  .m-line { margin: 6px 0 0; color: var(--ink-2); font-size: 14px; }
+  .m-line .pick { background: none; padding: 0; color: var(--solver); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+  .strip { display: flex; gap: 2px; height: clamp(26px, 4vh, 36px); margin-top: 12px; align-items: flex-end; }
+  .seg { flex: 1 1 0; min-width: 3px; height: 100%; border-radius: 4px; background: #cfd7ff; transform-origin: bottom; cursor: pointer; }
+  .seg.on { background: var(--solver); }
+  .cap { display: flex; align-items: center; gap: 8px; min-height: 22px; margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+  .mini { display: inline-flex; gap: 2px; } .mini b { width: 12px; height: 12px; border-radius: 3px; }
+
+  /* My picks */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: flex; align-items: baseline; gap: 8px; border-radius: 12px; padding: 8px 12px; background: var(--solver-soft); }
+  .chip:hover { background: #d8dfff; }
+  .chip b { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .chip span { color: var(--solver); font-weight: 700; font-size: 13px; }
+  .chip.win b::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--green); vertical-align: 2px; }
+
+  /* Benchmark popup */
+  dialog { border: 0; border-radius: 22px; padding: 26px 30px; width: min(560px, 92vw); background: var(--card); color: var(--ink); }
+  dialog::backdrop { background: rgba(42, 33, 26, .45); }
+  dialog h2 { margin: 0 0 4px; font-size: 22px; }
+  .close { position: absolute; top: 14px; right: 16px; width: 34px; height: 34px; border-radius: 10px; background: var(--key); font-size: 18px; font-weight: 700; }
+  .sweep { height: 6px; border-radius: 3px; background: var(--solver-soft); overflow: hidden; margin-top: 16px; }
+  .sweep i { display: block; width: 30%; height: 100%; border-radius: 3px; background: var(--solver); }
+  .avg { display: flex; align-items: baseline; gap: 10px; margin: 14px 0 16px; }
+  .avg .num { font-size: 64px; line-height: 1; color: var(--solver); }
+  .hist { display: grid; gap: 6px; }
+  .hrow { display: grid; grid-template-columns: 70px 1fr 50px; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); }
+  .hrow span:last-child { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .hbar { height: 18px; border-radius: 5px; background: var(--green); transform-origin: left; min-width: 4px; }
+  .hbar.fail { background: var(--oops); }
+  .hardest { margin: 16px 0 0; font-size: 13px; color: var(--ink-2); }
+  .hardest b { color: var(--ink); letter-spacing: .04em; }
 </style>
 </head>
 <body>
 <header>
-  <h1>WORDLE LAB</h1>
-  <button id="new-game">New game</button>
-  <button id="simulate">Simulate all answers</button>
+  <div class="logo" aria-label="Wordle Lab">wordle <span><b class="green">L</b> <b class="yellow">A</b> <b class="gray">B</b></span></div>
+  <button class="btn ghost" id="simulate">Benchmark</button>
+  <button class="btn" id="new-game">New game</button>
 </header>
 
 <main>
-  <section id="game">
+  <section class="game" aria-label="Game">
     <div id="board" aria-label="Game board"></div>
-    <div id="status" role="status" aria-live="polite"></div>
-    <div id="keyboard"></div>
+    <div id="keyboard" aria-label="Keyboard"></div>
   </section>
 
-  <aside>
-    <div class="card">
-      <h2>Words remaining</h2>
-      <div id="counter">–</div>
-      <div class="muted" id="counter-note">possible answers consistent with your guesses</div>
+  <section class="lab" aria-label="Solver">
+    <div class="say">
+      <div class="bot" id="bot" aria-hidden="true"><i class="eye"></i><i class="eye"></i></div>
+      <div class="bubble" id="bubble" role="status" aria-live="polite"></div>
     </div>
 
-    <div class="card">
-      <h2>Hints</h2>
-      <button id="hint">Get hint</button>
-      <div id="hint-body" class="muted" style="margin-top:10px">
-        Ranks guesses by entropy: how evenly a guess splits the remaining words.
-        Each bit roughly halves them. Click a word to type it.
-      </div>
+    <div class="panel">
+      <h2 class="ptitle">The pile <span>each dot is a word that could be the secret</span></h2>
+      <div class="count"><span id="counter" class="num">0</span><span class="hint">words could still be the secret</span></div>
+      <div id="pile" aria-hidden="true"></div>
+      <div id="left"></div>
     </div>
 
-    <div class="card" id="sim-card" hidden>
-      <h2>Simulation</h2>
-      <div id="sim-body"></div>
+    <div class="panel">
+      <h2 class="ptitle">Measure your guess <span>before you press Enter</span></h2>
+      <div id="meter"></div>
     </div>
-  </aside>
+
+    <div class="panel">
+      <h2 class="ptitle">My picks <button class="small" id="hint">Show me<kbd>?</kbd></button></h2>
+      <div id="picks"></div>
+    </div>
+  </section>
 </main>
 
-<div id="toast"></div>
+<dialog id="bench" aria-labelledby="bench-title">
+  <button class="close" id="bench-close" aria-label="Close">×</button>
+  <h2 id="bench-title">I played every word</h2>
+  <div id="bench-body"></div>
+</dialog>
 
+<script src="/static/gsap.min.js"></script>
 <script>
 const ROWS = 6, COLS = 5;
 const KEY_ROWS = ["qwertyuiop", "asdfghjkl", "<zxcvbnm>"];
-const RANK = { gray: 1, yellow: 2, green: 3 };  // keyboard keeps its best colour
+const RANK = { gray: 1, yellow: 2, green: 3 };  // the keyboard keeps each letter's best color
 
-let gameId = null, row = 0, current = "", status = "playing", busy = false, hintsOn = false;
+const state = { gameId: null, row: 0, current: "", status: "playing", busy: false, hintsOn: false, remaining: 0 };
 const keyColors = {};
+const dots = new Map();  // word -> its dot in the pile
+const counter = { value: 0 };
+let benchResult = null;
+
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -122,8 +189,17 @@ const el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
+const fmt = (n) => Math.round(n).toLocaleString("en-US");
+const up = (w) => w.toUpperCase();
 
-// ---- API: every call resolves to {ok, data} or {ok:false, error}; never throws.
+gsap.defaults({ duration: 0.4, ease: "power2.out" });
+// Reduced motion: run every GSAP animation 50x faster. State still changes, nothing visibly moves.
+gsap.matchMedia().add("(prefers-reduced-motion: reduce)", () => {
+  gsap.globalTimeline.timeScale(50);
+  return () => gsap.globalTimeline.timeScale(1);
+});
+
+// ---- API: resolves to {ok, data} or {ok: false, status, error}. Never throws.
 async function api(method, path, body) {
   try {
     const res = await fetch(path, {
@@ -137,192 +213,431 @@ async function api(method, path, body) {
     const error = typeof d === "string" ? d : (Array.isArray(d) && d[0]?.msg) || `Request failed (${res.status})`;
     return { ok: false, status: res.status, error };
   } catch {
-    return { ok: false, error: "Can't reach the server. Is it running?" };
+    return { ok: false, error: "I can't reach the server. Is it running?" };
   }
 }
 
-let toastTimer;
-function toast(msg) {
-  const t = $("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+// ---- The solver character: a speech bubble plus a body that reacts.
+const bot = $("bot");
+gsap.timeline({ repeat: -1, repeatDelay: 3.2 }).to(".eye", { scaleY: 0.1, duration: 0.07, yoyo: true, repeat: 1 });
+
+const moods = {
+  happy: () => gsap.to(bot, { y: -16, duration: 0.22, ease: "power2.out", yoyo: true, repeat: 3 }),
+  oops: () => gsap.to(bot, { keyframes: { rotation: [0, -16, 13, -8, 4, 0] }, duration: 0.5, ease: "none" }),
+  sad: () => gsap.fromTo(bot, { scaleY: 0.82, y: 6 }, { scaleY: 1, y: 0, duration: 0.9, ease: "elastic.out(1, 0.4)" }),
+  think: () => gsap.to(".eye", { x: 4, duration: 0.2, yoyo: true, repeat: 1 }),
+};
+
+let lastSaid = [], oopsTimer;
+// Words wrapped in *stars* are shown bold. An "oops" message fades back to the last real one.
+function say(text, mood) {
+  const b = $("bubble");
+  clearTimeout(oopsTimer);
+  b.classList.toggle("oops", mood === "oops");
+  const line = el("span");  // one inline box, so spaces around bold words survive the flex layout
+  line.append(...text.split(/(\*[^*]+\*)/).map((p) => (p.startsWith("*") ? el("b", null, p.slice(1, -1)) : p)));
+  b.replaceChildren(line);
+  gsap.fromTo(b, { scale: 0.94, autoAlpha: 0.4 }, { scale: 1, autoAlpha: 1, duration: 0.35, ease: "back.out(3)", transformOrigin: "left center" });
+  if (mood) moods[mood]();
+  if (mood === "oops") { if (lastSaid.length) oopsTimer = setTimeout(() => say(...lastSaid), 2400); }
+  else lastSaid = [text];
 }
 
 // ---- Board and keyboard
 function buildBoard() {
-  const board = $("board");
-  board.replaceChildren();
-  for (let r = 0; r < ROWS; r++) {
-    const rowEl = el("div", "row");
-    for (let c = 0; c < COLS; c++) rowEl.append(el("div", "tile"));
-    board.append(rowEl);
-  }
+  $("board").replaceChildren(...Array.from({ length: ROWS }, () => {
+    const row = el("div", "row");
+    for (let c = 0; c < COLS; c++) row.append(el("div", "tile"));
+    return row;
+  }));
 }
 
 function buildKeyboard() {
-  const kb = $("keyboard");
-  kb.replaceChildren();
-  for (const letters of KEY_ROWS) {
-    const r = el("div", "krow");
+  $("keyboard").replaceChildren(...KEY_ROWS.map((letters) => {
+    const row = el("div", "krow");
     for (const ch of letters) {
-      const label = ch === "<" ? "Enter" : ch === ">" ? "⌫" : ch;
-      const key = el("button", "key" + (ch === "<" || ch === ">" ? " wide" : ""), label);
-      key.dataset.key = ch === "<" ? "Enter" : ch === ">" ? "Backspace" : ch;
+      const name = ch === "<" ? "Enter" : ch === ">" ? "Backspace" : ch;
+      const key = el("button", "key" + (name.length > 1 ? " wide" : ""), ch === "<" ? "Enter" : ch === ">" ? "⌫" : ch);
+      key.dataset.key = name;
+      key.tabIndex = -1;  // the physical keyboard does the work; keeps Enter from re-clicking a focused key
       if (ch === ">") key.setAttribute("aria-label", "Backspace");
-      key.addEventListener("click", () => press(key.dataset.key));
-      r.append(key);
+      key.addEventListener("click", () => { squish(key); press(name); });
+      row.append(key);
     }
-    kb.append(r);
-  }
+    return row;
+  }));
 }
 
-function tilesOf(r) { return $("board").children[r].children; }
-
-function drawCurrent() {
-  const tiles = tilesOf(row);
-  for (let c = 0; c < COLS; c++) {
-    tiles[c].textContent = current[c] || "";
-    tiles[c].classList.toggle("filled", !!current[c]);
-  }
+// "auto" only cancels a running scale tween, so a tile still fading in keeps fading in.
+function squish(node, from = 0.84) {
+  gsap.fromTo(node, { scale: from }, { scale: 1, duration: 0.4, ease: "back.out(5)", overwrite: "auto" });
 }
 
-function paintRow(r, word, colors) {
-  const tiles = tilesOf(r);
+function keyFor(name) {
+  return document.querySelector(`.key[data-key="${name.length > 1 ? name : name.toLowerCase()}"]`);
+}
+
+const tilesOf = (r) => [...$("board").children[r].children];
+
+function drawCurrent(popIndex) {
+  const tiles = tilesOf(state.row);
+  tiles.forEach((t, c) => {
+    t.textContent = state.current[c] || "";
+    t.classList.toggle("filled", !!state.current[c]);
+  });
+  if (popIndex != null) squish(tiles[popIndex], 0.7);
+  drawMeter();
+}
+
+function shake() {
+  gsap.to($("board").children[state.row], { keyframes: { x: [0, -12, 11, -8, 5, -2, 0] }, duration: 0.45, ease: "none" });
+}
+
+// One timeline: each tile tips away, takes its color while edge-on, and tips back.
+function reveal(r, word, colors) {
+  const tl = gsap.timeline();
+  tilesOf(r).forEach((t, c) => {
+    const at = c * 0.2;
+    t.textContent = word[c];
+    tl.to(t, { rotationX: -90, duration: 0.22, ease: "power2.in" }, at)
+      .call(() => { t.classList.add(colors[c]); t.setAttribute("aria-label", `${word[c]} ${colors[c]}`); }, null, at + 0.22)
+      .to(t, { rotationX: 0, duration: 0.3, ease: "back.out(2)" }, at + 0.22);
+  });
+  return tl;
+}
+
+function paintKeyboard(word, colors) {
   colors.forEach((color, c) => {
-    tiles[c].textContent = word[c];
-    tiles[c].classList.add(color);
-    tiles[c].setAttribute("aria-label", `${word[c]} ${color}`);
     const ch = word[c];
     if (!keyColors[ch] || RANK[color] > RANK[keyColors[ch]]) keyColors[ch] = color;
   });
   document.querySelectorAll(".key").forEach((k) => {
-    k.classList.remove("green", "yellow", "gray");
     const color = keyColors[k.dataset.key];
-    if (color) k.classList.add(color);
+    if (!color || k.classList.contains(color)) return;
+    k.classList.remove("green", "yellow", "gray");
+    k.classList.add(color);
+    squish(k, 0.9);
   });
 }
 
-function shake() {
-  const r = $("board").children[row];
-  r.classList.remove("shake");
-  void r.offsetWidth;  // restart the animation
-  r.classList.add("shake");
+// ---- The pile: one dot per possible secret word, alphabetical.
+function setCounter(to) {
+  gsap.to(counter, { value: to, duration: 1, ease: "power3.out", overwrite: true,
+                     onUpdate: () => { $("counter").textContent = fmt(counter.value); } });
+}
+
+async function buildPile() {
+  const res = await api("GET", "/api/words");
+  if (!res.ok) { $("pile").replaceChildren(el("p", "hint", res.error)); return; }
+  for (const w of res.data.words) dots.set(w, el("i", "dot"));
+  $("pile").replaceChildren(...dots.values());
+}
+
+function resetPile() {
+  const all = [...dots.values()];
+  if (!all.length) return;
+  all.forEach((d) => d.classList.remove("gone", "lit"));
+  gsap.killTweensOf(all);
+  gsap.fromTo(all, { scale: 0, opacity: 1 }, {
+    scale: 1, duration: 0.5, ease: "back.out(3)", clearProps: "transform,opacity",
+    stagger: { grid: "auto", from: "center", amount: 0.8 },
+  });
+}
+
+function shrinkPile(remainingWords) {
+  const keep = new Set(remainingWords), leaving = [];
+  for (const [w, d] of dots) {
+    if (keep.has(w) || d.classList.contains("gone")) continue;
+    d.classList.add("gone");
+    leaving.push(d);
+  }
+  if (!leaving.length) return;  // e.g. the winning guess rules nothing new out
+  // Ruled-out words wink out in random order, like popcorn in reverse.
+  gsap.to(leaving, { scale: 0.4, opacity: 0.14, duration: 0.45, ease: "back.in(2)", stagger: { amount: 0.9, from: "random" } });
+}
+
+function showLeft(words) {
+  const left = $("left");
+  left.replaceChildren();
+  if (!words || words.length > 12) return;
+  left.append("Could be: ");
+  words.forEach((w, i) => left.append(el("b", null, up(w)), i < words.length - 1 ? ", " : ""));
+  gsap.from(left, { autoAlpha: 0, y: 6 });
+}
+
+let litNow = [];
+function highlight(words) {
+  if (litNow.length) {
+    gsap.to(litNow, { scale: 1, duration: 0.2, overwrite: "auto" });
+    litNow.forEach((d) => d.classList.remove("lit"));
+    litNow = [];
+  }
+  $("pile").classList.toggle("focus", !!words);
+  if (!words) return;
+  litNow = words.map((w) => dots.get(w)).filter(Boolean);
+  litNow.forEach((d) => d.classList.add("lit"));
+  gsap.fromTo(litNow, { scale: 1 }, { scale: 2.2, duration: 0.35, ease: "back.out(4)", overwrite: "auto", stagger: { amount: 0.12, from: "random" } });
+}
+
+// ---- Measure your guess
+function drawMeter() {
+  highlight(null);
+  let msg;
+  if (state.status !== "playing") msg = "Game over. Press New game for another round.";
+  else if (state.current.length === COLS) msg = "Measuring…";
+  else if (state.current) msg = `Keep going. ${COLS - state.current.length} more letter${state.current.length === COLS - 1 ? "" : "s"} and I'll measure it.`;
+  else msg = "Type a word. I'll show how much it would teach you before you press Enter.";
+  $("meter").replaceChildren(el("p", "hint", msg));
+}
+
+let previewTimer;
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  if (state.current.length < COLS) return;
+  const word = state.current;
+  previewTimer = setTimeout(() => preview(word), 120);
+}
+
+async function preview(word) {
+  moods.think();
+  const res = await api("GET", `/api/games/${state.gameId}/split?guess=${encodeURIComponent(word)}`);
+  if (word !== state.current || state.status !== "playing" || state.busy) return;  // the player has moved on
+  if (!res.ok) { $("meter").replaceChildren(el("p", "hint", `${up(word)} isn't in my word list. Try another.`)); return; }
+  renderMeter(res.data);
+}
+
+function grade(d) {
+  const best = d.best.entropy;
+  if (d.entropy > best + 1e-9) return ["t-best", "Better than my pick!"];
+  if (d.entropy > best - 1e-9) return ["t-best", "Best possible"];
+  const r = best > 0 ? d.entropy / best : 1;
+  return r >= 0.85 ? ["t-good", "Great"] : r >= 0.6 ? ["t-ok", "Okay"] : ["t-weak", "Weak"];
+}
+
+function renderMeter(d) {
+  const [cls, label] = grade(d);
+  const top = el("div", "m-top"), left = el("div"), bits = el("div", "m-bits"), num = el("span", "num", "0.0");
+  left.append(el("span", "m-word", d.guess), " ", el("span", "tag " + cls, label));
+  bits.append(num, el("span", "hint", "bits"));
+  top.append(left, bits);
+
+  const line = el("p", "m-line",
+    `Cuts the pile in half about ${d.entropy.toFixed(1)} times. You'd have about ${d.expected_remaining.toFixed(1)} words left.` +
+    (d.possible ? " It could even win. " : " "));
+  if (d.entropy + 1e-9 < d.best.entropy) {
+    const pick = el("button", "pick", up(d.best.word));
+    pick.addEventListener("click", () => typeWord(d.best.word));
+    line.append("My pick: ", pick, ` (${d.best.entropy.toFixed(1)} bits).`);
+  }
+
+  // One block per group of words that would get the same colors. Many small blocks = you learn a lot.
+  const strip = el("div", "strip"), cap = el("div", "cap");
+  const idle = () => cap.replaceChildren(`Each block is a group of words that would get the same colors. Many small blocks = great guess. Point at one.`);
+  idle();
+  const segs = d.groups.map((g) => {
+    const seg = el("span", "seg");
+    seg.style.flexGrow = g.words.length;
+    seg.tabIndex = 0;
+    seg.setAttribute("aria-label", `${g.words.length} words would show ${g.colors.join(", ")}`);
+    const on = () => {
+      seg.classList.add("on");
+      gsap.to(seg, { scaleY: 1.3, duration: 0.25, ease: "back.out(4)", overwrite: "auto" });
+      highlight(g.words);
+      const mini = el("span", "mini");
+      for (const c of g.colors) mini.append(el("b", c));
+      const n = g.words.length;
+      cap.replaceChildren(mini, n === 1 ? ` Just 1 word would show these colors: ${up(g.words[0])}.` : ` ${n} words would show these colors.`);
+    };
+    const off = () => {
+      seg.classList.remove("on");
+      gsap.to(seg, { scaleY: 1, duration: 0.2, overwrite: "auto" });
+      highlight(null);
+      idle();
+    };
+    seg.addEventListener("mouseenter", on); seg.addEventListener("focus", on);
+    seg.addEventListener("mouseleave", off); seg.addEventListener("blur", off);
+    strip.append(seg);
+    return seg;
+  });
+
+  $("meter").replaceChildren(top, line, strip, cap);
+  const shown = { v: 0 };
+  gsap.timeline()
+    .to(shown, { v: d.entropy, duration: 0.6, ease: "power3.out", onUpdate: () => { num.textContent = shown.v.toFixed(2); } }, 0)
+    .from(left.lastChild, { scale: 0, duration: 0.4, ease: "back.out(3)" }, 0.25)
+    .from(segs, { scaleY: 0, duration: 0.45, ease: "back.out(3)", stagger: { amount: 0.35 } }, 0.05);
+}
+
+// ---- My picks
+function picksIntro() {
+  $("picks").replaceChildren(el("p", "hint", "Stuck? I'll show the five guesses that teach you the most."));
+}
+
+function typeWord(word) {
+  if (state.status !== "playing" || state.busy) return;
+  state.current = word;
+  drawCurrent();
+  tilesOf(state.row).forEach((t, c) => gsap.fromTo(t, { y: -10 }, { y: 0, duration: 0.4, delay: c * 0.04, ease: "bounce.out" }));
+  schedulePreview();
+}
+
+async function getHint() {
+  if (!state.gameId || state.status !== "playing") return;
+  state.hintsOn = true;
+  $("hint").disabled = true;
+  $("picks").replaceChildren(el("p", "hint", "Thinking…"));
+  moods.think();
+  const res = await api("GET", `/api/games/${state.gameId}/hint?top=5`);
+  $("hint").disabled = state.status !== "playing";
+  if (!res.ok) { $("picks").replaceChildren(el("p", "hint", res.error)); return; }
+  const chips = el("div", "chips");
+  const made = res.data.suggestions.map((s) => {
+    const chip = el("button", "chip" + (s.possible ? " win" : ""));
+    chip.title = s.possible ? "This one could be the secret" : "Can't win, but teaches a lot";
+    chip.append(el("b", null, s.word), el("span", null, s.entropy.toFixed(1) + " bits"));
+    chip.addEventListener("click", () => typeWord(s.word));
+    chip.addEventListener("mouseenter", () => gsap.fromTo(chip, { rotation: -3 }, { rotation: 0, duration: 0.5, ease: "elastic.out(1, 0.3)" }));
+    chips.append(chip);
+    return chip;
+  });
+  $("picks").replaceChildren(chips);
+  gsap.from(made, { scale: 0.5, autoAlpha: 0, duration: 0.45, ease: "back.out(3)", stagger: 0.06 });
 }
 
 // ---- Game flow
 async function newGame() {
   const res = await api("POST", "/api/games");
-  if (!res.ok) { toast(res.error); return; }
-  gameId = res.data.id; row = 0; current = ""; status = "playing"; hintsOn = false;
+  if (!res.ok) { say(res.error, "oops"); return; }
+  Object.assign(state, { gameId: res.data.id, row: 0, current: "", status: "playing", busy: false, hintsOn: false, remaining: res.data.remaining });
   for (const k in keyColors) delete keyColors[k];
-  buildBoard(); buildKeyboard();
-  $("status").textContent = "";
-  $("counter").textContent = res.data.remaining;
+  buildBoard(); buildKeyboard(); resetPile(); showLeft(null);
+  setCounter(res.data.remaining);
   $("hint").disabled = false;
-  $("hint-body").replaceChildren(el("span", null,
-    "Ranks guesses by entropy: how evenly a guess splits the remaining words. Each bit roughly halves them. Click a word to type it."));
+  drawMeter(); picksIntro();
+  say(`I'm thinking of a word. *${fmt(res.data.remaining)}* words could be it. Make a guess!`, "happy");
+  gsap.from("#board .tile", { autoAlpha: 0, scale: 0.4, duration: 0.45, ease: "back.out(3)",
+                              stagger: { grid: [ROWS, COLS], from: "start", amount: 0.4 } });
 }
 
 function press(key) {
-  if (!gameId || status !== "playing" || busy) return;
-  if (key === "Enter") return submit();
-  if (key === "Backspace") current = current.slice(0, -1);
-  else if (/^[a-z]$/i.test(key) && current.length < COLS) current += key.toLowerCase();
-  drawCurrent();
+  if (!state.gameId || state.status !== "playing" || state.busy) return;
+  if (key === "Enter") { submit(); return; }
+  if (key === "Backspace") {
+    if (!state.current) return;
+    state.current = state.current.slice(0, -1);
+    drawCurrent();
+  } else if (/^[a-z]$/i.test(key) && state.current.length < COLS) {
+    state.current += key.toLowerCase();
+    drawCurrent(state.current.length - 1);
+  } else return;
+  schedulePreview();
 }
 
 async function submit() {
-  if (current.length < COLS) { shake(); toast("Not enough letters"); return; }
-  busy = true;
-  const res = await api("POST", `/api/games/${gameId}/guesses`, { guess: current });
-  busy = false;
+  if (state.current.length < COLS) { shake(); say("Five letters, please.", "oops"); return; }
+  state.busy = true;
+  clearTimeout(previewTimer);
+  const res = await api("POST", `/api/games/${state.gameId}/guesses`, { guess: state.current });
   if (!res.ok) {
-    shake(); toast(res.error);
-    if (res.status === 404) gameId = null;  // server restarted; game is gone
+    state.busy = false;
+    shake();
+    say(res.status === 400 && /word list/.test(res.error) ? `*${up(state.current)}* isn't in my word list.` : res.error, "oops");
+    if (res.status === 404) state.gameId = null;  // the server restarted and forgot this game
     return;
   }
-  const d = res.data;
-  paintRow(row, d.guess, d.colors);
-  row++; current = ""; status = d.status;
-  $("counter").textContent = d.remaining;
-  if (status === "won") $("status").textContent = `Solved in ${row}! 🎉`;
-  else if (status === "lost") $("status").textContent = `Out of guesses. The word was ${d.answer.toUpperCase()}.`;
-  if (status !== "playing") $("hint").disabled = true;
-  else if (hintsOn) getHint();
+  const d = res.data, r = state.row, before = state.remaining;
+  state.current = "";
+  await reveal(r, d.guess, d.colors);
+  paintKeyboard(d.guess, d.colors);
+  setCounter(d.remaining);
+  shrinkPile(d.remaining_words);
+  showLeft(d.remaining_words);
+  Object.assign(state, { row: r + 1, status: d.status, busy: false, remaining: d.remaining });
+  drawMeter();
+
+  const knocked = before - d.remaining, G = `*${up(d.guess)}*`;
+  if (d.status === "won") {
+    say(r === 0 ? `${G} on the first try?! Are you reading my mind?` : `Yes! ${G} it is. Solved in ${r + 1}.`, "happy");
+    gsap.to(tilesOf(r), { y: -26, duration: 0.25, ease: "power2.out", yoyo: true, repeat: 1, stagger: 0.08 });
+  } else if (d.status === "lost") {
+    say(`Out of guesses. It was *${up(d.answer)}*. Next one's yours.`, "sad");
+  } else if (d.remaining === 1) {
+    say(`${G} knocked out ${fmt(knocked)}. Only *one* word left. You've got this.`, "happy");
+  } else {
+    say(knocked
+      ? `${G} knocked out *${fmt(knocked)}* words. *${fmt(d.remaining)}* left.`
+      : `${G} didn't rule anything out. Still *${fmt(d.remaining)}* left.`);
+  }
+  if (d.status !== "playing") { $("hint").disabled = true; return; }
+  if (state.hintsOn) getHint();
 }
 
-async function getHint() {
-  if (!gameId || status !== "playing") return;
-  hintsOn = true;
-  const body = $("hint-body");
-  body.replaceChildren(el("span", "muted", "Thinking…"));
-  $("hint").disabled = true;
-  const res = await api("GET", `/api/games/${gameId}/hint?top=5`);
-  $("hint").disabled = status !== "playing";
-  if (!res.ok) { body.replaceChildren(el("span", "muted", res.error)); return; }
-  const d = res.data;
-  $("counter").textContent = d.remaining;
-
-  const table = el("table");
-  const head = el("tr");
-  [["Guess", ""], ["Bits", "num"], ["Avg left", "num"]].forEach(([t, c]) => head.append(el("th", c, t)));
-  const thead = el("thead"), tbody = el("tbody");
-  thead.append(head);
-  table.append(thead, tbody);
-  for (const s of d.suggestions) {
-    const tr = el("tr");
-    tr.title = `Expected to leave about ${s.expected_remaining.toFixed(1)} of ${d.remaining} words`;
-    const w = el("td");
-    w.append(el("span", "word", s.word), " ");
-    if (s.possible) w.append(el("span", "badge", "could win"));
-    tr.append(w, el("td", "num", s.entropy.toFixed(2)), el("td", "num", s.expected_remaining.toFixed(1)));
-    tr.addEventListener("click", () => { if (status === "playing") { current = s.word; drawCurrent(); } });
-    tbody.append(tr);
-  }
-  const parts = [table];
-  if (d.remaining_words) {
-    const words = el("div", null, d.remaining_words.join(" "));
-    words.id = "words";
-    parts.push(el("div", "muted", "Still possible:"), words);
-  }
-  body.replaceChildren(...parts);
-}
-
-async function runSimulation() {
-  const card = $("sim-card"), body = $("sim-body");
-  card.hidden = false;
-  $("simulate").disabled = true;
-  body.replaceChildren(el("span", "muted", "Playing every answer… about 40 seconds the first time."));
+// ---- Benchmark popup
+async function openBenchmark() {
+  const dlg = $("bench");
+  dlg.showModal();
+  gsap.fromTo(dlg, { scale: 0.85, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.4, ease: "back.out(2.5)" });
+  if (benchResult) { drawBenchmark(benchResult); return; }
+  const sweep = el("div", "sweep"), bar = el("i");
+  sweep.append(bar);
+  $("bench-body").replaceChildren(el("p", "hint", "Playing all 2,315 secret words, one after another. About 40 seconds the first time."), sweep);
+  const sweeping = gsap.fromTo(bar, { xPercent: -100 }, { xPercent: 340, duration: 1.1, ease: "power1.inOut", repeat: -1 });
   const res = await api("GET", "/api/simulate");
-  $("simulate").disabled = false;
-  if (!res.ok) { body.replaceChildren(el("span", "muted", res.error)); return; }
-  const d = res.data;
+  sweeping.kill();
+  if (!res.ok) { $("bench-body").replaceChildren(el("p", "hint", res.error)); return; }
+  benchResult = res.data;
+  if (dlg.open) drawBenchmark(benchResult);
+}
+
+function drawBenchmark(d) {
   const max = Math.max(...Object.values(d.distribution));
-  const parts = [el("div", null, `${d.games} games · average ${d.average.toFixed(2)} guesses · ${d.failed} failed (>6)`)];
+  const avg = el("div", "avg"), num = el("span", "num", "0.00");
+  avg.append(num, el("span", "hint", `guesses on average. ${d.failed ? `${d.failed} took more than six.` : "Never more than six."}`));
+  const hist = el("div", "hist"), bars = [];
   for (const [n, count] of Object.entries(d.distribution)) {
-    const r = el("div", "bar-row");
-    const track = el("div"), bar = el("div", "bar" + (Number(n) > 6 ? " fail" : ""));
+    const row = el("div", "hrow"), track = el("div"), bar = el("div", "hbar" + (Number(n) > 6 ? " fail" : ""));
     bar.style.width = `${(count / max) * 100}%`;
     track.append(bar);
-    r.append(el("span", "muted", n), track, el("span", "num", count));
-    parts.push(r);
+    row.append(el("span", null, `${n} guess${n === "1" ? "" : "es"}`), track, el("span", null, fmt(count)));
+    hist.append(row);
+    bars.push(bar);
   }
-  parts.push(el("div", "muted", "Hardest: " + d.hardest.map((h) => `${h.answer.toUpperCase()} (${h.guesses})`).join(", ")));
-  body.replaceChildren(...parts);
+  const hard = el("p", "hardest", "Hardest for me: ");
+  d.hardest.slice(0, 6).forEach((h, i) => hard.append(el("b", null, up(h.answer)), i < 5 ? ", " : ""));
+  $("bench-body").replaceChildren(avg, hist, hard);
+  const shown = { v: 0 };
+  gsap.timeline()
+    .to(shown, { v: d.average, duration: 1, ease: "power3.out", onUpdate: () => { num.textContent = shown.v.toFixed(2); } }, 0)
+    .from(bars, { scaleX: 0, duration: 0.7, ease: "back.out(1.6)", stagger: 0.08 }, 0.1);
 }
 
+// ---- Wiring
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  // preventDefault also stops Enter from re-clicking whichever button has focus
-  if (e.key === "Enter" || e.key === "Backspace" || /^[a-z]$/i.test(e.key)) { e.preventDefault(); press(e.key); }
+  if (e.ctrlKey || e.metaKey || e.altKey || $("bench").open) return;
+  if (e.key === "?") { e.preventDefault(); getHint(); return; }
+  if (e.key === "Enter" || e.key === "Backspace" || /^[a-z]$/i.test(e.key)) {
+    e.preventDefault();  // also stops Enter from re-clicking whichever button has focus
+    const key = keyFor(e.key);
+    if (key) squish(key, 0.88);
+    press(e.key);
+  }
 });
-$("new-game").addEventListener("click", (e) => { e.target.blur(); newGame(); });
-$("hint").addEventListener("click", getHint);
-$("simulate").addEventListener("click", runSimulation);
+for (const id of ["new-game", "simulate", "hint"]) $(id).addEventListener("pointerdown", (e) => squish(e.currentTarget, 0.9));
+$("new-game").addEventListener("click", (e) => { e.currentTarget.blur(); newGame(); });
+$("hint").addEventListener("click", (e) => { e.currentTarget.blur(); getHint(); });
+$("simulate").addEventListener("click", (e) => { e.currentTarget.blur(); openBenchmark(); });
+$("bench-close").addEventListener("click", () => $("bench").close());
+$("bench").addEventListener("click", (e) => {  // clicks on the backdrop land on the dialog itself, outside its box
+  const r = $("bench").getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $("bench").close();
+});
 
-buildBoard(); buildKeyboard(); newGame();
+(async () => {
+  buildBoard(); buildKeyboard();
+  gsap.from(".lab > *", { y: 20, autoAlpha: 0, duration: 0.6, ease: "back.out(1.6)", stagger: 0.08 });
+  await buildPile();
+  await newGame();
+})();
 </script>
 </body>
 </html>
