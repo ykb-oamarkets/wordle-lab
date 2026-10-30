@@ -58,7 +58,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About the project
 
-![Wordle Lab mid-game, with the hint panel open][product-screenshot]
+![Wordle Lab mid-game: the solver measures CLOUT and lights up its words in the pile][product-screenshot]
 
 Wordle hides a secret five-letter word. You get six guesses. After each guess, every letter changes color:
 
@@ -304,7 +304,7 @@ I built this with Claude Code, an AI coding tool. Code that runs isn't the same 
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[product-screenshot]: images/screenshot.png
+[product-screenshot]: images/wordle-lab.png
 [Python-badge]: https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white
 [Python-url]: https://www.python.org/
 [FastAPI-badge]: https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white
