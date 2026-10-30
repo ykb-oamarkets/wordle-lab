@@ -6,7 +6,7 @@
   <h3 align="center">Wordle Lab</h3>
 
   <p align="center">
-    Play Wordle in your browser. When you're stuck, a solver tells you the best next guess and shows the maths behind it.
+    Play Wordle in your browser. Stuck? Ask for a hint and the solver shows you the best next guess, and why.
     <br />
     <a href="#how-it-works"><strong>See how it works »</strong></a>
     <br />
@@ -15,7 +15,7 @@
     &middot;
     <a href="#api">API</a>
     &middot;
-    <a href="#how-this-was-built-and-checked">How this was built and checked</a>
+    <a href="#how-i-built-and-checked-it">How I built and checked it</a>
   </p>
 </div>
 
@@ -49,7 +49,7 @@
       </ul>
     </li>
     <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#how-this-was-built-and-checked">How this was built and checked</a></li>
+    <li><a href="#how-i-built-and-checked-it">How I built and checked it</a></li>
   </ol>
 </details>
 
@@ -60,21 +60,21 @@
 
 ![Wordle Lab mid-game, with the hint panel open][product-screenshot]
 
-Wordle hides a five-letter word and gives you six guesses. After each guess, every letter changes color:
+Wordle hides a secret five-letter word. You get six guesses. After each guess, every letter changes color:
 
 * Green means right letter, right spot.
 * Yellow means the letter is in the word, but somewhere else.
 * Gray means the letter isn't in the word, or the word has no copies of it left.
 
-Wordle Lab is that game with a helper sitting next to you. The helper keeps a pile of every word that could still be the answer. Ask it for a hint and it tells you which guess would shrink that pile the most.
+Wordle Lab is that game with a solver built in. Think of the solver as a friend sitting next to you. It keeps a pile of every word that could still be the secret. Ask it for a hint and it tells you which guess would shrink that pile the most.
 
-I built it as a take-home exercise. The brief asked for four parts and one optional extra. All five are here:
+Here's what's inside:
 
-1. A game engine that colors guesses and knows when you've won or lost.
-2. A solver that works out which words are still possible and ranks the next guesses.
-3. An HTTP API to start a game, make a guess and ask for a hint.
+1. The game. It colors your guesses and knows when you've won or lost.
+2. The solver. It throws out words that can't be the secret and ranks your next guesses.
+3. An HTTP API, so any program can start a game, guess and ask for hints.
 4. A web page with a board, a keyboard, a hint panel and a words-remaining counter.
-5. A simulate button that plays every possible answer and charts how many guesses each one took.
+5. A simulate button. The solver plays every possible secret word and charts how many guesses each one took.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -84,35 +84,59 @@ I built it as a take-home exercise. The brief asked for four parts and one optio
 
 #### Coloring a guess
 
-Repeated letters are the hard part. The engine makes two passes over your guess. The first pass marks the greens. The second pass goes through the other letters and makes one yellow only if the answer still has an unused copy of it.
+The game checks your guess in two rounds.
 
-Say the answer is CRANE and you guess EERIE. The last E is green, and it uses up the only E in CRANE. So the first two E's turn gray, not yellow. A quick "is this letter anywhere in the word?" check gets this wrong, and the tests cover it.
+Round one finds the greens. Round two looks at the letters left over. A letter only turns yellow if the secret word still has a spare copy of it.
 
-#### Shrinking the pile
+Here's why that matters. The secret is CRANE and you guess EERIE. CRANE has just one E. The last E in EERIE is green, so it takes that one E. There's no E left to spare, so the first two E's turn gray, not yellow.
 
-Picture every possible answer written on its own card. After each guess, the solver picks up each card and asks one question. If this card were the answer, would my guess have shown exactly these colors? If not, the card goes in the bin.
+#### Throwing out words
 
-To answer that question, the solver calls the same coloring code the game uses. That means the solver and the game can't disagree about the rules. The number of cards left is the "words remaining" counter on the page.
+Picture every possible secret word written on its own card.
+
+After each guess, the solver picks up each card and asks, "If this were the secret, would I have seen these exact colors?" If the answer is no, the card goes in the bin. The cards left over are the "words remaining" number on the page.
+
+The solver uses the same coloring code as the game to answer that question. So the two always agree on the rules.
 
 #### Picking the best guess
 
-Think about 20 Questions. "Is it a giraffe?" is a bad question. The answer is nearly always no, and you've learned almost nothing. "Is it bigger than a cat?" is a good one, because either answer rules out about half the options.
+Start with a toy game. Your friend hides one of 8 toys behind their back, and you get to ask questions.
 
-The solver judges every guess the same way. It pretends to play the guess against each card in the pile and sorts the cards into groups by the colors that would come back. If the cards land in lots of small groups, the guess is good, because whatever colors you see, only a few words survive. If they all land in one group, the guess tells you nothing.
+"Is it the purple dinosaur?" is a bad question. The answer is almost always no, and you still have 7 toys to choose from.
 
-Entropy turns that spread into a single number, measured in bits. Each bit roughly halves the pile. With 8 words left, a guess that gives each word its own color pattern is worth 3 bits, because 8 halves to 4, then 2, then 1. A guess that gives all 8 the same pattern is worth 0. The formula is `H = -Σ p·log₂(p)`, where `p` is the share of the pile in each group.
+"Is it an animal?" is a good question if 4 of the toys are animals. Whatever the answer, half the toys are gone.
 
-Each hint shows three things per word:
+Entropy counts how many times a question cuts the pile in half. Each halving is one bit.
 
-* Bits, the entropy described above.
-* Avg left, the number of words you can expect to still have after guessing it.
-* A "could win" tag if the word might be the answer itself.
+| The pile goes from | Halvings | Entropy |
+|---|---|---|
+| 8 to 8 | none | 0 bits, useless |
+| 8 to 4 | once | 1 bit |
+| 8 to 2 | twice | 2 bits |
+| 8 to 1 | three times | 3 bits, you know the secret |
 
-Sometimes the best guess can't win. After RAISE, the top hint is often a word like COUNT that has none of the letters you already found. It looks odd, but it tests five new letters at once. When two guesses tie, the solver picks the one that could win. It never suggests a word that teaches nothing and can't win.
+In Wordle, your guess is the question and the colors are the answer. Say only 4 words are left: CRANE, CRATE, CRAVE and CRAZE.
+
+* **Guess CRATE.** If the secret is CRATE, you see all green. If it's any of the other three, you see the same colors every time. So most of the time you still have 3 words left. That's worth about 0.8 bits.
+* **Guess EVENT.** Each of the 4 words gives back different colors. Whatever you see, you know the secret. Going from 4 to 1 is two halvings, so it's worth 2 bits. EVENT can't win, but it's the better guess.
+
+The solver does this for every word it could guess. It pretends each remaining word is the secret, puts words that would give the same colors into the same group, and scores how small the groups are. Then it suggests the words with the most bits.
+
+Even groups beat uneven ones. With 4 words, a 2-and-2 split always leaves you with 2. A 1-and-3 split usually leaves you with 3. The formula `H = -Σ p·log₂(p)` gives the score, where `p` is the share of words that land in each group.
+
+#### Reading a hint
+
+Each row in the hint panel shows:
+
+* Bits, how many times the guess should halve the pile.
+* Avg left, about how many words you'll still have after guessing it.
+* A "could win" tag, if the word might be the secret itself.
+
+After RAISE, the top hint is often a word like COUNT that can't be the secret. That looks strange, but COUNT tests five new letters at once. When two words tie on bits, the solver picks the one that could win.
 
 #### How well it plays
 
-The solver opens with RAISE, worth 5.88 bits. I ran it against all 2,315 answers. It averages 3.50 guesses and never needs more than six.
+The solver always opens with RAISE, worth 5.88 bits. I had it play all 2,315 possible secret words. It needs 3.50 guesses on average and never more than six.
 
 | Guesses needed | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|
@@ -146,12 +170,13 @@ You need Python 3.9 or newer. Check what you have with:
 python3 --version
 ```
 
-The word lists ship in `data/`, so there's nothing else to download.
+The word lists are already in `data/`, so there's nothing else to download.
 
 ### Installation
 
-1. Unzip the folder or clone the repo, then move into it.
+1. Clone the repo and move into it.
    ```sh
+   git clone https://github.com/ykb-oamarkets/wordle-lab.git
    cd wordle-lab
    ```
 2. Make a virtual environment and switch it on.
@@ -175,26 +200,28 @@ The word lists ship in `data/`, so there's nothing else to download.
 <!-- USAGE EXAMPLES -->
 ## Usage
 
+Run every command below from the `wordle-lab` folder with the virtual environment switched on. If you see `command not found: python`, run `source .venv/bin/activate` first. Each new terminal tab needs it again.
+
 ### Play in the browser
 
 ```sh
 python -m uvicorn web.app:app --port 8000
 ```
 
-Open http://localhost:8000. Type on your keyboard or click the keys on screen. Press **Get hint** when you want help. Click any suggested word to type it in. After your first hint, the panel refreshes on its own after every guess.
+Open http://localhost:8000. Type on your keyboard or click the keys on screen. Press **Get hint** when you want help, and click any suggested word to type it in. After your first hint, the panel updates by itself after every guess.
 
-The first hint of a game compares 2,315 words against 2,315 words, which takes about seven seconds. The server starts that work the moment it boots, so the result is usually ready before you ask.
+The first hint of a game checks 2,315 words against 2,315 words, which takes about seven seconds. The server starts on it as soon as it boots, so it's usually ready before you ask.
 
-**Simulate all answers** takes about 40 seconds the first time. The server keeps the result, so later clicks show it straight away.
+**Simulate all answers** takes about 40 seconds the first time. The server remembers the result, so later clicks show it straight away.
 
 ### Play in the terminal
 
 ```sh
 python -m wordle play        # type ? for a hint
-python -m wordle simulate    # solver vs. every answer, about 40 seconds
+python -m wordle simulate    # the solver plays every secret word, about 40 seconds
 ```
 
-The terminal version imports the same engine and solver as the website and has no web code at all. The brief asked for the game logic to work no matter how it's used, and this is the proof.
+The terminal version uses the same game and solver as the website, with no web code at all. The game logic doesn't depend on the website.
 
 ### API
 
@@ -203,18 +230,18 @@ The terminal version imports the same engine and solver as the website and has n
 | `POST` | `/api/games` | A new game's `id`, `max_guesses` and `remaining` |
 | `POST` | `/api/games/{id}/guesses` with `{"guess": "crane"}` | `pattern`, `colors`, `status`, `guesses_left`, `remaining`, plus `answer` once the game ends |
 | `GET` | `/api/games/{id}/hint?top=5` | `remaining`, the top `suggestions` with `entropy`, `expected_remaining` and `possible`, and `remaining_words` when 20 or fewer are left |
-| `GET` | `/api/simulate` | `games`, `average`, `distribution`, `failed` and the 10 `hardest` answers |
+| `GET` | `/api/simulate` | `games`, `average`, `distribution`, `failed` and the 10 `hardest` secret words |
 
-Patterns use `G` for green, `Y` for yellow and `.` for gray, so CRANE against EERIE comes back as `..Y.G`.
+Patterns use `G` for green, `Y` for yellow and `.` for gray. CRANE against EERIE comes back as `..Y.G`.
 
 Every error comes back as `{"detail": "<message>"}`:
 
 * `400` means the guess was the wrong length, had non-letters, or isn't in the word list. It doesn't cost you a turn.
 * `404` means there's no game with that id. Games live in memory, so restarting the server clears them.
 * `409` means the game is already over, for both guesses and hints.
-* `422` means the request body was missing or malformed, or `top` was outside 1 to 20.
+* `422` means the request body was missing or broken, or `top` was outside 1 to 20.
 
-The hint only uses the colors you've already seen. It never looks at the hidden answer.
+Hints only use the colors you've already seen. They never peek at the secret word.
 
 ### Project layout
 
@@ -227,9 +254,9 @@ web/
   app.py           FastAPI routes that call into wordle/
   index.html       the page
 data/
-  answers.txt      2,315 words that can be the answer
+  answers.txt      2,315 words that can be the secret
   allowed.txt      10,657 more words you're allowed to guess
-tests/             engine, solver and API tests
+tests/             game, solver and API tests
 ```
 
 `web/` imports from `wordle/`. Nothing in `wordle/` imports from `web/`.
@@ -241,30 +268,41 @@ tests/             engine, solver and API tests
 <!-- ROADMAP -->
 ## Roadmap
 
-- [x] Game engine that handles repeated letters correctly
+- [x] Game that handles repeated letters correctly
 - [x] Entropy solver with ranked hints
 - [x] HTTP API with clear error messages
 - [x] Web page with board, keyboard, hint panel and counter
-- [x] Simulate every answer
-- [ ] Let the solver suggest any of the 12,972 allowed words, not just the 2,315 answers. Guesses would get slightly better, but each hint would take about five times longer.
-- [ ] Precompute every guess-by-answer pattern once with numpy, to bring the simulation down from 40 seconds to a few.
-- [ ] Save games to disk so a restart doesn't wipe them. The brief said no database, so they live in memory for now.
+- [x] Simulate every secret word
+- [ ] Let the solver suggest any of the 12,972 allowed words, not just the 2,315 possible secrets. Guesses would get a little better, but each hint would take about five times longer.
+- [ ] Work out every guess-and-secret color pattern once with numpy, so the simulation takes a few seconds instead of 40.
+- [ ] Save games to disk so a restart doesn't wipe them. Right now they only live in memory.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 
 <!-- AI USAGE -->
-## How this was built and checked
+## How I built and checked it
 
-<!-- Rewrite this section in your own words before you submit. -->
+I built this with Claude Code, an AI coding tool. Code that runs isn't the same as code that's right, so here's what checks it:
 
-The brief asks which parts an AI tool wrote and how they were checked. I used Claude Code to write the code. I didn't take the output on trust. These are the checks:
-
-* I worked out the coloring tests by hand, one for each repeated-letter trap. Those cover a green using up the only copy, two guessed copies against one in the answer, and one guessed copy against two in the answer.
-* A randomized test plays 200 games and confirms the true answer never gets thrown out of the pile. It also confirms every word left in the pile matches the colors seen so far.
-* The entropy tests use four words, CRANE, CRATE, CRAKE and CRAVE, small enough to check on paper. A guess that splits them perfectly scores exactly 2 bits. A guess that splits them one and three scores 0.811 bits.
-* The full simulation solves all 2,315 answers. Every game ends on five greens, and none takes more than six guesses.
-* I drove the page in a real browser. I typed a fake word, played a full game using only the hints, ran the simulation, and stopped the server mid-game to make sure the page showed an error and kept working.
+* There's a test for each repeated-letter trap, and every expected color was worked out by hand. The traps are a green using up the only copy, two guessed copies against one in the secret word, and one guessed copy against two.
+* A random test plays 200 games. It checks that the real secret word never gets thrown out, and that every word left matches the colors seen so far.
+* The entropy tests use CRANE, CRATE, CRAVE and CRAZE from the example above, because they're small enough to check on paper. EVENT scores exactly 2 bits. Guessing one of the four words scores 0.811.
+* The simulation plays all 2,315 secret words. Every game ends on five greens, and none takes more than six guesses.
+* A run in a real browser typed a fake word, played a full game using only hints, ran the simulation, and stopped the server mid-game. The page showed an error message and kept working.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- MARKDOWN LINKS & IMAGES -->
+[product-screenshot]: images/screenshot.png
+[Python-badge]: https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white
+[Python-url]: https://www.python.org/
+[FastAPI-badge]: https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white
+[FastAPI-url]: https://fastapi.tiangolo.com/
+[pytest-badge]: https://img.shields.io/badge/pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white
+[pytest-url]: https://docs.pytest.org/
+[JavaScript-badge]: https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black
+[JavaScript-url]: https://developer.mozilla.org/en-US/docs/Web/JavaScript

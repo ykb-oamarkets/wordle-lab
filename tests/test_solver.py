@@ -7,15 +7,15 @@ import pytest
 from wordle.engine import load_words, score
 from wordle.solver import entropy, remaining_words, simulate, solve, suggest
 
-# All four share C R A _ E, so any one of them as a guess only says "it's me" or "it's not".
-FOUR = ["crane", "crate", "crake", "crave"]
-# TRANK separates all four: ".GGG.", "YGG..", ".GG.Y", ".GG.." respectively.
-SPLITTER = "trank"
+# Four real answers sharing C R A _ E, so any one of them as a guess only says "it's me" or "it's not".
+FOUR = ["crane", "crate", "crave", "craze"]
+# EVENT can't win but separates all four: "Y..G.", "Y...Y", "YY...", "Y...." respectively.
+SPLITTER = "event"
 
 
 def test_remaining_words_keeps_only_consistent_words():
     history = [("crane", score("crane", "crave"))]  # GGG.G
-    assert remaining_words(FOUR, history) == ["crate", "crake", "crave"]
+    assert remaining_words(FOUR, history) == ["crate", "crave", "craze"]
     assert remaining_words(FOUR, []) == FOUR
 
 
